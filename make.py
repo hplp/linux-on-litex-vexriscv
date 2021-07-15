@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 
+#
+# This file is part of Linux-on-LiteX-VexRiscv
+#
+# Copyright (c) 2019-2021, Linux-on-LiteX-VexRiscv Developers
+# SPDX-License-Identifier: BSD-2-Clause
+
 import sys
 import argparse
 import os
@@ -15,9 +21,10 @@ kB = 1024
 
 class Board:
     soc_kwargs = {"integrated_rom_size": 0x10000, "l2_size": 0}
-    def __init__(self, soc_cls=None, soc_capabilities={}, bitstream_ext=""):
+    def __init__(self, soc_cls=None, soc_capabilities={}, soc_constants={}, bitstream_ext=""):
         self.soc_cls          = soc_cls
         self.soc_capabilities = soc_capabilities
+        self.soc_constants    = soc_constants
         self.bitstream_ext    = bitstream_ext
 
     def load(self, filename):
@@ -167,6 +174,25 @@ class KCU105(Board):
             "sdcard",
         }, bitstream_ext=".bit")
 
+# VC707 support ---------------------------------------------------------------------------------
+
+class VC707(Board):
+    soc_kwargs = {"uart_baudrate": 500e3} # 1Mbauds not supported by CP210x.
+    def __init__(self):
+        from litex_boards.targets import vc707
+        Board.__init__(self, vc707.BaseSoC, soc_capabilities={
+            # Communication
+            "serial",
+            #"ethernet",
+            # Storage
+            #"sdcard",
+            #"sata",
+            # GPIOs
+            "leds",
+            # Monitoring
+            #"xadc",
+        }, bitstream_ext=".bit")
+
 # ZCU104 support -----------------------------------------------------------------------------------
 
 class ZCU104(Board):
@@ -244,6 +270,34 @@ class XCU1525(Board):
             "sata",
         }, bitstream_ext=".bit")
 
+# AlveoU280 (ES1) support -------------------------------------------------------------------------------
+
+class AlveoU280(Board):
+    soc_kwargs = {
+        "ddram_channel": 0, # pick board DRAM channel
+        "with_pcie": False,
+        "driver": False,
+        "with_led_chaser": False,
+        "with_hbm": False,
+        "sys_clk_freq": 150e6
+    }
+    def __init__(self):
+        from litex_boards.targets import alveo_u280
+        Board.__init__(self, alveo_u280.BaseSoC, soc_capabilities={
+            # Communication
+            # "serial"
+        }, bitstream_ext=".bit")
+
+# AlveoU250 support -------------------------------------------------------------------------------
+
+class AlveoU250(Board):
+    def __init__(self):
+        from litex_boards.targets import alveo_u250
+        Board.__init__(self, alveo_u250.BaseSoC, soc_capabilities={
+            # Communication
+            "serial"
+        }, bitstream_ext=".bit")
+
 # SDS1104X-E support -------------------------------------------------------------------------------
 
 class SDS1104XE(Board):
@@ -253,11 +307,39 @@ class SDS1104XE(Board):
         Board.__init__(self, sds1104xe.BaseSoC, soc_capabilities={
             # Communication
             "serial",
+            "ethernet",
+            # Video
+            "framebuffer",
         }, bitstream_ext=".bit")
 
     def load(self, filename):
         prog = self.platform.create_programmer()
         prog.load_bitstream(filename, device=1)
+
+# QMTECH WuKong support ---------------------------------------------------------------------------
+
+class Qmtech_WuKong(Board):
+    SPIFLASH_PAGE_SIZE    = 256
+    SPIFLASH_SECTOR_SIZE  = 64*kB
+    SPIFLASH_DUMMY_CYCLES = 11
+    soc_kwargs = {
+        "uart_baudrate": 3e6,
+        "l2_size" : 2048,              # Use Wishbone and L2 for memory accesses.
+    }
+    def __init__(self):
+        from litex_boards.targets import qmtech_wukong
+        Board.__init__(self, qmtech_wukong.BaseSoC, soc_capabilities={
+            "leds",
+            # Communication
+            "serial",
+            "ethernet",
+            # Storage
+            "spiflash",
+            #"spisdcard",
+            # Video
+            #"video_terminal",
+            "framebuffer",
+        }, bitstream_ext=".bit")
 
 #---------------------------------------------------------------------------------------------------
 # Lattice Boards
@@ -449,69 +531,46 @@ class Qmtech_EP4CE15(Board):
             # "leds",
         }, bitstream_ext=".sof")
 
-# QMTECH WuKong support ---------------------------------------------------------------------------
-
-class Qmtech_WuKong(Board):
-    SPIFLASH_PAGE_SIZE    = 256
-    SPIFLASH_SECTOR_SIZE  = 64*kB
-    SPIFLASH_DUMMY_CYCLES = 11
-    soc_kwargs = {
-        "uart_baudrate": 3e6,
-        "l2_size" : 2048,              # Use Wishbone and L2 for memory accesses.
-    }
-    def __init__(self):
-        from litex_boards.targets import qmtech_wukong
-        Board.__init__(self, qmtech_wukong.BaseSoC, soc_capabilities={
-            "leds",
-            # Communication
-            "serial",
-            "ethernet",
-            # Storage
-            "spiflash",
-            "spisdcard",
-            # Video
-            #"video_terminal",
-            "framebuffer",
-        }, bitstream_ext=".bit")
-
 #---------------------------------------------------------------------------------------------------
 # Build
 #---------------------------------------------------------------------------------------------------
 
 supported_boards = {
     # Xilinx
-    "acorn_cle_215": AcornCLE215,
-    "arty":          Arty,
-    "arty_a7":       ArtyA7,
-    "arty_s7":       ArtyS7,
-    "netv2":         NeTV2,
-    "genesys2":      Genesys2,
-    "kc705":         KC705,
-    "kcu105":        KCU105,
-    "zcu104":        ZCU104,
-    "nexys4ddr":     Nexys4DDR,
-    "nexys_video":   NexysVideo,
-    "minispartan6":  MiniSpartan6,
-    "pipistrello":   Pipistrello,
-    "xcu1525":       XCU1525,
-    "qmtech_wukong": Qmtech_WuKong,
-    "sds1104xe":     SDS1104XE,
+    "acorn_cle_215":    AcornCLE215,
+    "arty":             Arty,
+    "arty_a7":          ArtyA7,
+    "arty_s7":          ArtyS7,
+    "netv2":            NeTV2,
+    "genesys2":         Genesys2,
+    "kc705":            KC705,
+    "kcu105":           KCU105,
+    "vc707" :           VC707,
+    "zcu104":           ZCU104,
+    "nexys4ddr":        Nexys4DDR,
+    "nexys_video":      NexysVideo,
+    "minispartan6":     MiniSpartan6,
+    "pipistrello":      Pipistrello,
+    "xcu1525":          XCU1525,
+    "alveo_u280":       AlveoU280,#ES1
+    "alveo_u250":       AlveoU250,
+    "qmtech_wukong":    Qmtech_WuKong,
+    "sds1104xe":        SDS1104XE,
 
     # Lattice
-    "versa_ecp5":   VersaECP5,
-    "ulx3s":        ULX3S,
-    "hadbadge":     HADBadge,
-    "orangecrab":   OrangeCrab,
-    "camlink_4k":   CamLink4K,
-    "trellisboard": TrellisBoard,
-    "ecpix5":       ECPIX5,
-    "colorlight_i5":Colorlight_i5,
+    "versa_ecp5":      VersaECP5,
+    "ulx3s":           ULX3S,
+    "hadbadge":        HADBadge,
+    "orangecrab":      OrangeCrab,
+    "camlink_4k":      CamLink4K,
+    "trellisboard":    TrellisBoard,
+    "ecpix5":          ECPIX5,
+    "colorlight_i5":   Colorlight_i5,
 
     # Altera/Intel
-    "de0nano":      De0Nano,
-    "de10nano":     De10Nano,
-
-    "qmtech_ep4ce15":      Qmtech_EP4CE15,
+    "de0nano":         De0Nano,
+    "de10nano":        De10Nano,
+    "qmtech_ep4ce15":  Qmtech_EP4CE15,
 }
 
 def main():
@@ -579,6 +638,10 @@ def main():
         soc = SoCLinux(board.soc_cls, **soc_kwargs)
         board.platform = soc.platform
 
+        # SoC constants ----------------------------------------------------------------------------
+        for k, v in board.soc_constants.items():
+            soc.add_constant(k, v)
+
         # SoC peripherals --------------------------------------------------------------------------
         if board_name in ["arty", "arty_a7"]:
             from litex_boards.platforms.arty import _sdcard_pmod_io
@@ -624,7 +687,7 @@ def main():
             csr_json     = os.path.join(build_dir, "csr.json"),
             csr_csv      = os.path.join(build_dir, "csr.csv")
         )
-        builder.build(run=args.build)
+        builder.build(run=args.build, build_name=board_name)
 
         # DTS --------------------------------------------------------------------------------------
         soc.generate_dts(board_name)
